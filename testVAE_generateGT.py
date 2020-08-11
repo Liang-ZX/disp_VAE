@@ -1,12 +1,13 @@
 import torch
 import os
-from MeshData import PcdDataset
+from MeshDataset import PcdDataset, write_ndarray
 from VAEnet import VAEnn
 from torch.utils.data import DataLoader
 from LatentDataset import write_latent_code
 import numpy as np
 from tqdm import tqdm
 import warnings
+
 warnings.filterwarnings('ignore')
 
 
@@ -17,7 +18,7 @@ def main():
     else:
         device = torch.device('cpu')
 
-    cfg = dict(device=device, batch_size=1, measure_cnt=2500, generate_cnt=2500, latent_num=128 * 3,
+    cfg = dict(device=device, batch_size=20, measure_cnt=2500, generate_cnt=2500, latent_num=128 * 3,
                data_locate="./datasets/pcd_result", save_latent_path="./datasets/latent_result",
                model_path="./model_ckpt/model_final3.pth", is_val=True)
 
@@ -46,7 +47,16 @@ def inference(model, cfg, val_loader, dst_len):
     pbar.set_description("Generating Latent Code")
     model.eval()
     with torch.no_grad():
-        for i, (pcd_batch, _, _, pcd_meta) in enumerate(val_loader):
+        for i, (pcd_batch, mean_ref, max_ref, pcd_meta) in enumerate(val_loader):
+            # for j in range(mean_ref.shape[0]):
+            #     file_path = "./datasets/pcd_info/" + pcd_meta['img_id'][j]
+            #     file_name = "/" + pcd_meta['car_id'][j] + ".txt"
+            #     if not os.path.isdir(file_path):
+            #         os.mkdir(file_path)
+            #     array = torch.cat((mean_ref[j], max_ref[j]), dim=0).numpy()
+            #     write_ndarray(array, file_path + file_name)
+            #     pbar.update(1)
+
             pcd_batch = pcd_batch.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
             z_decoded, z_mean, z_log_var = model(pcd_batch)
             # z_decoded = z_decoded * (max_batch-mean_batch) + mean_batch
@@ -55,10 +65,10 @@ def inference(model, cfg, val_loader, dst_len):
             latent = latent.cpu().numpy()
             for j in range(z_mean.shape[0]):
                 file_path = cfg['save_latent_path'] + "/" + pcd_meta['img_id'][j]
-                file_name = "/"+pcd_meta['car_id'][j]+".txt"
+                file_name = "/" + pcd_meta['car_id'][j] + ".txt"
                 if not os.path.isdir(file_path):
                     os.mkdir(file_path)
-                write_latent_code(latent[j], file_path+file_name)
+                write_latent_code(latent[j], file_path + file_name)
                 pbar.update(1)
         pbar.close()
     print("Finish Generating Latent Code")

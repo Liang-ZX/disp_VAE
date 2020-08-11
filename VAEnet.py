@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from STNnet import PointNetfeat, T_Net
 from CapsuleNet import PrimaryPointCapsLayer
-# from loss_function import compute_chamfer_loss
+from loss_function import compute_chamfer_loss
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -70,6 +70,7 @@ class VAEdecoder(nn.Module):
         self.bn3 = nn.BatchNorm1d(latent_num//4)
 
         self.decoder_fc = nn.Conv1d(latent_num//4, 3, kernel_size=1)
+        self.conv4 = nn.Conv1d(3, 3, kernel_size=1)
 
     def forward(self, latent_code):
         # input B * latent_num * N
@@ -81,30 +82,37 @@ class VAEdecoder(nn.Module):
 
         output = torch.tanh(points)  # B * 3 * N
         # output = torch.sigmoid(x)
+        output = self.conv4(output)
         return output
 
 
 class VAEnn(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg, with_encoder=True):
         super().__init__()
         self.cfg = cfg
+        self.with_encoder = with_encoder
         # self.stn = T_Net(k=3)
         self.encoder = VAEencoder(cfg)
         self.decoder = VAEdecoder(cfg)
-        self.criterion = nn.MSELoss(reduction='none')
+        # self.criterion = nn.MSELoss(reduction='none')
         # self.feat = PointNetfeat(global_feat=False, feature_transform=False)  # pointNet  B * 1088 * N
         self.apply(init_weights)
 
-    def forward(self, input_coordinates):
-        # input B * N * 3
-        input_coordinates = input_coordinates.transpose(2, 1).contiguous()  # B * 3 * N
-        # trans = self.stn(input_coordinates)
-        # points = torch.bmm(input_coordinates.transpose(2, 1), trans)
-        # points = points.transpose(2, 1)
-        points = input_coordinates
+    def forward(self, *input_data):
+        if self.with_encoder:
+            # input B * N * 3
+            input_coordinates = input_data[0]
+            input_coordinates = input_coordinates.transpose(2, 1).contiguous()  # B * 3 * N
+            # trans = self.stn(input_coordinates)
+            # points = torch.bmm(input_coordinates.transpose(2, 1), trans)
+            # points = points.transpose(2, 1)
+            points = input_coordinates
 
-        # pts_feature, trans, _, pts_transformed = self.feat(input_coordinates)
-        z_mean, z_log_var = self.encoder(points)
+            # pts_feature, trans, _, pts_transformed = self.feat(input_coordinates)
+            z_mean, z_log_var = self.encoder(points)
+        else:
+            z_mean, z_log_var = input_data  # B * latent_num
+
         epsilon = torch.randn(z_mean.size()[0], z_mean.size()[1], self.cfg["generate_cnt"])
         # epsilon = torch.zeros_like(z_mean)
         if z_mean.is_cuda:
@@ -115,9 +123,9 @@ class VAEnn(nn.Module):
         # z_decoded = z_decoded.transpose(2, 1)
         # z_decoded = torch.bmm(z_decoded, torch.inverse(trans))
         # z_decoded = z_decoded.transpose(2, 1).contiguous()
-        loss = self.vae_loss(input_coordinates, z_decoded)
 
         if self.training:
+            loss = self.vae_loss(input_coordinates, z_decoded)
             return z_decoded.transpose(2, 1).contiguous(), latent_code, loss
         else:
             return z_decoded.transpose(2, 1).contiguous(), z_mean, z_log_var
@@ -127,10 +135,10 @@ class VAEnn(nn.Module):
         # input B * 3 * N
         x = input_coordinates.transpose(2, 1).contiguous()
         z = z_decoded.transpose(2, 1).contiguous()
-        # reconstr_loss = compute_chamfer_loss(x, z)  # B * 1
-        z = z.view(batch_size, -1)
-        x = x.view(batch_size, -1)
-        reconstr_loss = torch.mean(self.criterion(z, x), dim=-1)
+        reconstr_loss = compute_chamfer_loss(x, z)  # B * 1
+        # z = z.view(batch_size, -1)
+        # x = x.view(batch_size, -1)
+        # reconstr_loss = torch.mean(self.criterion(z, x), dim=-1)
         # KL-loss
         z_log_var = self.encoder.z_log_var  # B * latent_num
         z_mean = self.encoder.z_mean

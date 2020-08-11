@@ -19,12 +19,19 @@ def read_latent_code(file_path):
     return torch.tensor(z_mean), torch.tensor(z_log_var)
 
 
+def read_pcd_info(file_path):
+    array = np.loadtxt(file_path)
+    mean_pcd = array[0]
+    max_pcd = array[1]
+    return torch.tensor(mean_pcd).view(1, 3), torch.tensor(max_pcd).view(1, 3)
+
+
 def read_image(file_path):
     img = Image.open(file_path)
     return img
 
 
-class LatentDataset(torch.utils.data.Dataset):
+class KittiRoiDataset(torch.utils.data.Dataset):
     def __init__(self, roi_root_dir, latent_root_dir, transforms=None):
         super().__init__()
         self.roi_root_dir = roi_root_dir
@@ -58,3 +65,25 @@ class LatentDataset(torch.utils.data.Dataset):
 
         z_mean, z_log_var = read_latent_code(latent_path)
         return img, z_mean, z_log_var, img_meta
+
+
+class LatentDataset(torch.utils.data.Dataset):
+    def __init__(self, cfg):
+        super().__init__()
+        self.latent_root_dir = cfg['save_latent_path']
+        self.latent_names = glob.glob(self.latent_root_dir + "/*/*.txt")
+        self.pcd_info_dir = "./datasets/pcd_info"
+
+    def __len__(self):
+        return len(self.latent_names)
+
+    def __getitem__(self, index):
+        latent_path = self.latent_names[index]
+        (filepath, tempfilename) = os.path.split(latent_path)
+        img_id = os.path.split(filepath)[1]
+        car_id = os.path.splitext(tempfilename)[0]
+        img_meta = dict(img_id=img_id, car_id=car_id)
+
+        mean_pcd, max_pcd = read_pcd_info(self.pcd_info_dir+"/"+img_id+"/"+car_id+".txt")
+        z_mean, z_log_var = read_latent_code(latent_path)
+        return z_mean, z_log_var, mean_pcd, max_pcd, img_meta

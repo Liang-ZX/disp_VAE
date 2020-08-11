@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
-from LatentDataset import LatentDataset, write_latent_code
-from encoder_model import ResnetEncoder
+from LatentDataset import KittiRoiDataset, write_latent_code
+from resnetencoder import ResnetEncoder
 import torch.nn as nn
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
@@ -24,11 +24,11 @@ def main():
     learning_rate = 1e-3
     learning_rate_decay = 0.3
     cfg = dict(device=device, learning_rate=learning_rate, learning_rate_decay=learning_rate_decay,
-               epochs=25, print_every=20, save_every=2, batch_size=20, roi_img_path="./datasets/roi_result/left",
+               epochs=15, print_every=20, save_every=2, batch_size=50, roi_img_path="./datasets/roi_result/left",
                save_latent_path="./datasets/latent_result", save_path="./model_ckpt/", log_file="./log.txt",
                tensorboard_path="runs/train_visualization")
 
-    train_dataset = LatentDataset(cfg['roi_img_path'], cfg['save_latent_path'])
+    train_dataset = KittiRoiDataset(cfg['roi_img_path'], cfg['save_latent_path'])
     train_loader = DataLoader(train_dataset, batch_size=cfg['batch_size'], shuffle=True, num_workers=0, drop_last=True)
 
     model = ResnetEncoder(128 * 3)

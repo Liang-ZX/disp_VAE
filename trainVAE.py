@@ -5,28 +5,27 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 import os
-from MeshData import PcdDataset, write_pcd_from_ndarray
+from MeshDataset import PcdDataset, write_pcd_from_ndarray
 from VAEnet import VAEnn
 import warnings
 warnings.filterwarnings('ignore')
 
 def main():
     USE_GPU = True
-    RUN_PARALLEL = False
+    RUN_PARALLEL = True
     device_ids = [0, 1]
     if USE_GPU and torch.cuda.is_available():
         device = torch.device('cuda')
         if torch.cuda.device_count() <= 1:
             RUN_PARALLEL = False
-            pass
     else:
         device = torch.device('cpu')
         RUN_PARALLEL = False
 
     learning_rate = 1e-3
     learning_rate_decay = 0.3
-    cfg = dict(device=device, learning_rate=learning_rate, learning_rate_decay=learning_rate_decay, epochs=5,
-               print_every=2, save_every=2, batch_size=5, measure_cnt=2500, generate_cnt=2500, latent_num=128*3,
+    cfg = dict(device=device, learning_rate=learning_rate, learning_rate_decay=learning_rate_decay, epochs=15,
+               print_every=20, save_every=2, batch_size=50, measure_cnt=2500, generate_cnt=2500, latent_num=128*3,
                data_locate="./datasets/pcd_result", save_path="./model_ckpt/", save_pcd_path="./decode_result/",
                tensorboard_path="runs/train_visualization", is_val=False)
 
@@ -68,7 +67,7 @@ def do_train(model, cfg, train_loader, optimizer, scheduler, writer):
             optimizer.step()
 
             if i % print_every == 0:
-                print('Epoch %d/5: Iteration %d, loss = %.4f' % (e+1, i, loss.item()))
+                print('Epoch %d/15: Iteration %d, loss = %.4f' % (e+1, i, loss.item()))
                 writer.add_scalar('training_loss', loss.item(), e)
 
         # scheduler.step()
@@ -89,7 +88,7 @@ def do_train(model, cfg, train_loader, optimizer, scheduler, writer):
     with torch.no_grad():
         for i, (pcd_batch, mean_batch, max_batch) in enumerate(train_loader):
             pcd_batch = pcd_batch.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
-            z_decoded, latent = model(pcd_batch)
+            z_decoded, _, _ = model(pcd_batch)
             # z_decoded = z_decoded * (max_batch-mean_batch) + mean_batch
             z_decoded = z_decoded.cpu().numpy()
             for j in range(z_decoded.shape[0]):
