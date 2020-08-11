@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from STNnet import PointNetfeat, T_Net
 from CapsuleNet import PrimaryPointCapsLayer
-from loss_function import compute_chamfer_loss
+# from loss_function import compute_chamfer_loss
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -127,10 +127,10 @@ class VAEnn(nn.Module):
         # input B * 3 * N
         x = input_coordinates.transpose(2, 1).contiguous()
         z = z_decoded.transpose(2, 1).contiguous()
-        reconstr_loss = compute_chamfer_loss(x, z)  # B * 1
-        # z = z.view(batch_size, -1)
-        # x = x.view(batch_size, -1)
-        # reconstr_loss = torch.mean(self.criterion(z, x), dim=-1)
+        # reconstr_loss = compute_chamfer_loss(x, z)  # B * 1
+        z = z.view(batch_size, -1)
+        x = x.view(batch_size, -1)
+        reconstr_loss = torch.mean(self.criterion(z, x), dim=-1)
         # KL-loss
         z_log_var = self.encoder.z_log_var  # B * latent_num
         z_mean = self.encoder.z_mean

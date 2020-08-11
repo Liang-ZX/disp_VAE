@@ -7,4 +7,5 @@ runs/*
 *.xyz
 *.png
 model_ckpt/*
+ljzworkspace/*
 

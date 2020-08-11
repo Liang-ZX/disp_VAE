@@ -17,7 +17,7 @@ class KittiDataset(torch.utils.data.Dataset):
             self.transform = transforms
         else:
             self.transform = T.Compose([
-                # T.RandomSizedCrop(224),
+                T.Resize(224),
                 T.RandomHorizontalFlip(),
                 T.ToTensor(),
                 # T.Normalize(mean=[0.485, 0.456, 0.406],

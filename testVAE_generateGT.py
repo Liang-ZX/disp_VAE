@@ -17,7 +17,7 @@ def main():
     else:
         device = torch.device('cpu')
 
-    cfg = dict(device=device, batch_size=5, measure_cnt=2500, generate_cnt=2500, latent_num=128 * 3,
+    cfg = dict(device=device, batch_size=1, measure_cnt=2500, generate_cnt=2500, latent_num=128 * 3,
                data_locate="./datasets/pcd_result", save_latent_path="./datasets/latent_result",
                model_path="./model_ckpt/model_final3.pth", is_val=True)
 
@@ -26,8 +26,7 @@ def main():
 
     pcd_dst = PcdDataset(cfg)
     dst_len = pcd_dst.__len__()
-    val_loader = DataLoader(dataset=pcd_dst, batch_size=cfg['batch_size'], shuffle=True, num_workers=0,
-                              drop_last=True)
+    val_loader = DataLoader(dataset=pcd_dst, batch_size=cfg['batch_size'], shuffle=True, num_workers=0)
 
     model = VAEnn(cfg)
     model.to(device)
@@ -44,7 +43,7 @@ def inference(model, cfg, val_loader, dst_len):
     device = cfg['device']
     print("Start generating...")
     pbar = tqdm(total=dst_len)
-    pbar.set_description("Generating Latent Code:")
+    pbar.set_description("Generating Latent Code")
     model.eval()
     with torch.no_grad():
         for i, (pcd_batch, _, _, pcd_meta) in enumerate(val_loader):

@@ -54,9 +54,9 @@ def main():
 def do_train(model, cfg, train_loader, optimizer, scheduler, writer):
     print_every = cfg['print_every']
     device = cfg['device']
+    model.train()
     for e in range(cfg['epochs']):
         for i, (pcd_batch, _, _) in enumerate(train_loader):
-            model.train()
             pcd_batch = pcd_batch.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
             # normalize [-1,1]
             z_decoded, latent, loss = model(pcd_batch)
