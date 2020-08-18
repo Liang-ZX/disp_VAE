@@ -32,11 +32,15 @@ def read_image(file_path):
 
 
 class KittiRoiDataset(torch.utils.data.Dataset):
-    def __init__(self, roi_root_dir, latent_root_dir, transforms=None):
+    def __init__(self, cfg, transforms=None):
         super().__init__()
-        self.roi_root_dir = roi_root_dir
-        self.latent_root_dir = latent_root_dir
-        self.latent_names = glob.glob(self.latent_root_dir + "/*/*.txt")
+        self.is_val = cfg["is_val"]
+        self.roi_root_dir = cfg['roi_img_path']
+        if not self.is_val:
+            self.latent_root_dir = cfg['save_latent_path']
+            self.latent_names = glob.glob(self.latent_root_dir + "train/*/*.txt")
+        else:
+            self.img_names = glob.glob(self.roi_root_dir + "val/*/*.png")
 
         if transforms is not None:
             self.transform = transforms
@@ -50,20 +54,30 @@ class KittiRoiDataset(torch.utils.data.Dataset):
                 ])
         
     def __len__(self):
-        return len(self.latent_names)
+        if self.is_val:
+            return len(self.img_names)
+        else:
+            return len(self.latent_names)
 
     def __getitem__(self, index):
-        latent_path = self.latent_names[index]
-        (filepath, tempfilename) = os.path.split(latent_path)
-        img_id = os.path.split(filepath)[1]
-        car_id = os.path.splitext(tempfilename)[0]
-        img_path = self.roi_root_dir + "/"+img_id+"/"+car_id+".png"
+        z_mean, z_log_var = None, None
+        if not self.is_val:
+            latent_path = self.latent_names[index]
+            (filepath, tempfilename) = os.path.split(latent_path)
+            img_id = os.path.split(filepath)[1]
+            car_id = os.path.splitext(tempfilename)[0]
+            img_path = self.roi_root_dir + "train/" + img_id + "/" + car_id + ".png"
+            z_mean, z_log_var = read_latent_code(latent_path)
+        else:
+            img_path = self.img_names[index]
+            (filepath, tempfilename) = os.path.split(img_path)
+            img_id = os.path.split(filepath)[1]
+            car_id = os.path.splitext(tempfilename)[0]
+
         img_meta = dict(img_id=img_id, car_id=car_id)
-        
         img = read_image(img_path)
         img = self.transform(img)
 
-        z_mean, z_log_var = read_latent_code(latent_path)
         return img, z_mean, z_log_var, img_meta
 
 

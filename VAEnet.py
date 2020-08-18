@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import matplotlib.pyplot as plt
-from STNnet import PointNetfeat, T_Net
+from stn_net import PointNetfeat, T_Net
 from CapsuleNet import PrimaryPointCapsLayer
 from loss_function import compute_chamfer_loss
 
@@ -12,9 +11,10 @@ warnings.filterwarnings('ignore')
 
 
 class VAEencoder(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg, n_pts=None):
         super().__init__()
-        n_pts = cfg["measure_cnt"]
+        if n_pts is None:
+            n_pts = cfg["measure_cnt"]
         latent_num = cfg["latent_num"]
         self.fc1 = nn.Conv1d(3, 64, kernel_size=1)
         self.bn1 = nn.BatchNorm1d(64, momentum=0.99, eps=0.001)
@@ -34,10 +34,10 @@ class VAEencoder(nn.Module):
         self.logvar_bn = nn.BatchNorm1d(128, momentum=0.99, eps=0.001)
         self.logvar_relu = nn.LeakyReLU(negative_slope=0.3)
 
-        self.encoder_fc1 = nn.Linear(128*16, latent_num)
-        self.encoder_bn1 = nn.BatchNorm1d(latent_num)
-        self.encoder_fc2 = nn.Linear(128*16, latent_num)
-        self.encoder_bn2 = nn.BatchNorm1d(latent_num)
+        self.encoder_fc1 = nn.Conv1d(128, 16, kernel_size=1)
+        self.encoder_bn1 = nn.BatchNorm1d(16)
+        self.encoder_fc2 = nn.Conv1d(128, 16, kernel_size=1)
+        self.encoder_bn2 = nn.BatchNorm1d(16)
 
         self.z_mean = torch.zeros(cfg['batch_size'], latent_num)
         self.z_log_var = torch.ones(cfg['batch_size'], latent_num)
@@ -49,19 +49,20 @@ class VAEencoder(nn.Module):
         x = self.relu2(self.bn2(self.fc2(x)))
         x = self.ppc(x)  # B * 1024 * 16
 
-        z_mean = self.mean_relu(self.mean_bn(self.mean_fc(x))).view(batch_size, -1)  # B * (128 * 16)
-        z_log_var = self.logvar_relu(self.logvar_bn(self.logvar_fc(x))).view(batch_size, -1)
-        z_mean = self.encoder_bn1(self.encoder_fc1(z_mean))
-        z_log_var = self.encoder_bn2(self.encoder_fc2(z_log_var))
+        z_mean = self.mean_relu(self.mean_bn(self.mean_fc(x)))  # B * (128 * 16)
+        z_log_var = self.logvar_relu(self.logvar_bn(self.logvar_fc(x)))
+        z_mean = self.encoder_bn1(self.encoder_fc1(z_mean)).view(batch_size, -1)
+        z_log_var = self.encoder_bn2(self.encoder_fc2(z_log_var)).view(batch_size, -1)
         self.z_mean, self.z_log_var = z_mean, z_log_var
 
         return z_mean, z_log_var  # B * latent_num
 
 
 class VAEdecoder(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg, latent_num=None):
         super().__init__()
-        latent_num = cfg["latent_num"]
+        if latent_num is None:
+            latent_num = cfg["latent_num"]
         self.conv1 = nn.Conv1d(latent_num, latent_num, kernel_size=1)
         self.bn1 = nn.BatchNorm1d(latent_num)
         self.conv2 = nn.Conv1d(latent_num, latent_num//2, kernel_size=1)
@@ -91,9 +92,12 @@ class VAEnn(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.with_encoder = with_encoder
+        self.hourglass = True
         # self.stn = T_Net(k=3)
         self.encoder = VAEencoder(cfg)
+        self.encoder2 = VAEencoder(cfg, n_pts=cfg["generate_cnt"])
         self.decoder = VAEdecoder(cfg)
+        self.decoder2 = VAEdecoder(cfg, latent_num=2*cfg["latent_num"])
         # self.criterion = nn.MSELoss(reduction='none')
         # self.feat = PointNetfeat(global_feat=False, feature_transform=False)  # pointNet  B * 1088 * N
         self.apply(init_weights)
@@ -114,7 +118,6 @@ class VAEnn(nn.Module):
             z_mean, z_log_var = input_data  # B * latent_num
 
         epsilon = torch.randn(z_mean.size()[0], z_mean.size()[1], self.cfg["generate_cnt"])
-        # epsilon = torch.zeros_like(z_mean)
         if z_mean.is_cuda:
             epsilon = epsilon.cuda()
         latent_code = z_mean.unsqueeze(2) + torch.exp(z_log_var.unsqueeze(2)) * epsilon  # B * latent_num * N
@@ -123,6 +126,16 @@ class VAEnn(nn.Module):
         # z_decoded = z_decoded.transpose(2, 1)
         # z_decoded = torch.bmm(z_decoded, torch.inverse(trans))
         # z_decoded = z_decoded.transpose(2, 1).contiguous()
+        if self.with_encoder and self.hourglass:
+            points = z_decoded
+            z_mean2, z_log_var2 = self.encoder2(points)
+            z_mean = torch.cat((z_mean, z_mean2), 1)
+            z_log_var = torch.cat((z_log_var, z_log_var2), 1)
+            epsilon = torch.randn(z_mean.size()[0], z_mean.size()[1], self.cfg["generate_cnt"])
+            if z_mean.is_cuda:
+                epsilon = epsilon.cuda()
+            latent_code = z_mean.unsqueeze(2) + torch.exp(z_log_var.unsqueeze(2)) * epsilon
+            z_decoded = self.decoder2(latent_code)
 
         if self.training:
             loss = self.vae_loss(input_coordinates, z_decoded)
@@ -142,6 +155,9 @@ class VAEnn(nn.Module):
         # KL-loss
         z_log_var = self.encoder.z_log_var  # B * latent_num
         z_mean = self.encoder.z_mean
+        if self.hourglass:
+            z_log_var = torch.cat((z_log_var, self.encoder2.z_log_var), 1)
+            z_mean = torch.cat((z_mean, self.encoder2.z_mean), 1)
         latent_loss = -5e-4 * torch.mean(1 + z_log_var - z_mean ** 2 - torch.exp(z_log_var), dim=-1)  # KLDivloss
         loss = torch.mean(reconstr_loss + latent_loss)
 

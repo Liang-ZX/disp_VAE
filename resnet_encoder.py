@@ -1,6 +1,7 @@
 import torch
 import torchvision
 import torch.nn as nn
+from VAEnet import VAEnn
 
 
 class ResnetEncoder(nn.Module):
@@ -12,7 +13,7 @@ class ResnetEncoder(nn.Module):
     def forward(self, x):
         z_mean = self.mean_encoder(x)
         z_log_var = self.log_var_encoder(x)
-        return z_mean, z_log_var # B * 384
+        return z_mean, z_log_var  # B * 384
 
 
 class Resnet18(nn.Module):
@@ -65,3 +66,22 @@ class Resnet101(nn.Module):
         net = self.features(x)
         out = self.fc(net)
         return out
+
+
+class DispVAEnet(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        c_dim = cfg["latent_num"] * 2
+        self.encoder = ResnetEncoder(c_dim)
+        self.decoder = VAEnn(cfg, with_encoder=False)
+        self.is_val = cfg["is_val"]
+        if self.is_val:
+            self.encoder.load_state_dict(
+                {k.replace('module.', ''): v for k, v in torch.load(cfg['resnet_model']).items()})
+            self.decoder.load_state_dict({k.replace('module.', ''): v for k, v in torch.load(cfg['vae_model']).items()})
+            # model.load_state_dict(torch.load(cfg['model_path']))  # cpu train
+
+    def forward(self, img):
+        z_mean, z_log_var = self.encoder(img)  # B * latent_num
+        z_decoded, _, _ = self.decoder(z_mean, z_log_var)
+        return z_decoded
