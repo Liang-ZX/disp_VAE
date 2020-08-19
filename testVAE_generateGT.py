@@ -1,6 +1,6 @@
 import torch
 import os
-from mesh_dataset import PcdDataset, write_pcd_from_ndarray
+from pcd_dataset import PcdDataset, write_pcd_from_ndarray, write_ndarray
 from VAEnet import VAEnn
 from torch.utils.data import DataLoader
 from roi_dataset import write_latent_code
@@ -46,16 +46,15 @@ def inference(model, cfg, val_loader, vis_pcd=False):
     pbar.set_description("Generating Latent Code")
     model.eval()
     with torch.no_grad():
-        for i, (pcd_batch, mean_ref, pcd_meta) in enumerate(val_loader):
-            # for j in range(mean_ref.shape[0]):
+        for i, (pcd_batch, pcd_info, pcd_meta) in enumerate(val_loader):
+            # for j in range(pcd_info.shape[0]):
             #     file_path = "./datasets/pcd_info/" + pcd_meta['img_id'][j]
             #     file_name = "/" + pcd_meta['car_id'][j] + ".txt"
             #     if not os.path.isdir(file_path):
             #         os.mkdir(file_path)
-            #     array = torch.cat((mean_ref[j], max_ref[j]), dim=0).numpy()
+            #     array = pcd_info[j].numpy()
             #     write_ndarray(array, file_path + file_name)
             #     pbar.update(1)
-
             pcd_batch = pcd_batch.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
             z_decoded, z_mean, z_log_var = model(pcd_batch)
             if vis_pcd:

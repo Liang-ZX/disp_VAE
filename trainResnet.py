@@ -25,7 +25,7 @@ def main():
     learning_rate = 1e-3
     learning_rate_decay = 0.3
     cfg = dict(device=device, learning_rate=learning_rate, learning_rate_decay=learning_rate_decay, latent_num=256,
-               epochs=15, print_every=20, save_every=2, batch_size=16, roi_img_path="./datasets/roi_result/left/",
+               epochs=10, print_every=20, save_every=4, batch_size=32, roi_img_path="./datasets/roi_result/left/",
                save_latent_path="./datasets/latent_result/", save_path="./model_ckpt/", log_file="./log.txt",
                tensorboard_path="runs/train_visualization", is_val=False)
 
@@ -34,6 +34,7 @@ def main():
 
     model = ResnetEncoder(cfg["latent_num"] * 2)
     model.to(device)
+    model.load_state_dict({k.replace('module.', ''): v for k, v in torch.load("./model_ckpt/model_resnet.pth").items()})
     if RUN_PARALLEL:
         model = nn.DataParallel(model, device_ids=device_ids)
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -70,7 +71,15 @@ def do_train(model, cfg, train_loader, optimizer, scheduler=None):
                 print('Epoch %d/15: Iteration %d, loss = %.4f' % (e + 1, i, loss.item()))
 
         # scheduler.step()
-
+        if (e+1) % cfg['save_every'] == 0:
+            file_path = cfg['save_path'] + "model_resnet_epoch" + str(e+1) + ".pth"
+            torch.save({
+                'epoch': e,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                # 'scheduler_state_dict': scheduler.state_dict(),
+            }, file_path)
+            print("Save model "+file_path)
     torch.save(model.state_dict(), cfg['save_path'] + "model_resnet.pth")
     print("Save final model " + cfg['save_path'] + "model_resnet.pth")
     print("Finish Training")

@@ -35,11 +35,11 @@ class PcdDataset(torch.utils.data.Dataset):
         max_pcd[:index, :] = np.max(np.abs((pcd_origin[:index] - mean_pcd[:index])), axis=0, keepdims=True)
         max_tmp = np.max(max_pcd)
         pcd[:index, :] = (pcd_origin[:index] - mean_pcd[:index]) / max_tmp
-        mean_ref = torch.from_numpy(mean_pcd[0]).float().view(1, 3)
+        pcd_info = torch.from_numpy(np.append(mean_pcd[0], max_tmp)).float().view(1, 4)
         if not self.is_val:
-            return torch.from_numpy(pcd).float(), mean_ref  # N * 3
+            return torch.from_numpy(pcd).float(), pcd_info  # N * 3
         else:
-            return torch.from_numpy(pcd).float(), mean_ref, pcd_meta
+            return torch.from_numpy(pcd).float(), pcd_info, pcd_meta
 
 
 def read_pcd(pcd_path):
@@ -117,4 +117,4 @@ def write_pcd_from_ndarray(points, save_pcd_path):
 
 def write_ndarray(array, save_path):
     with open(save_path, 'w') as f:
-        np.savetxt(f, array, delimiter=' ', fmt='%f %f %f')
+        np.savetxt(f, array, delimiter=' ', fmt='%f %f %f %f')

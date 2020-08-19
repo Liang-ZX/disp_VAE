@@ -3,7 +3,7 @@ import os
 from torch.utils.data import DataLoader
 from roi_dataset import KittiRoiDataset
 from resnet_encoder import DispVAEnet
-from mesh_dataset import write_pcd_from_ndarray
+from pcd_dataset import write_pcd_from_ndarray
 import numpy as np
 from tqdm import tqdm
 import warnings
@@ -19,7 +19,7 @@ def main():
 
     cfg = dict(device=device, batch_size=16, measure_cnt=2500, generate_cnt=2500, latent_num=256,
                roi_img_path="./datasets/roi_result/left/", save_pcd_path="./datasets/pcd_generate/val/",
-               resnet_model="./model_ckpt/model_resnet1.pth", vae_model="./model_ckpt/model_final2.pth", is_val=True)
+               resnet_model="./model_ckpt/model_resnet2.pth", vae_model="./model_ckpt/model_final2.pth", is_val=True)
 
     if not os.path.isdir(cfg['save_pcd_path']):
         os.mkdir(cfg['save_pcd_path'])
@@ -36,11 +36,13 @@ def main():
 
 def inference(model, cfg, val_loader):
     print("Start generating...")
+    device = cfg["device"]
     pbar = tqdm(total=cfg['dst_len'])
     pbar.set_description("Generating Point Cloud")
     model.eval()
     with torch.no_grad():
         for i, (img, _, _, img_meta) in enumerate(val_loader):
+            img = img.to(device=device, dtype=torch.float)
             z_decoded = model(img)
             z_decoded = z_decoded.cpu().numpy()
             for j in range(z_decoded.shape[0]):
@@ -51,7 +53,7 @@ def inference(model, cfg, val_loader):
                     os.mkdir(tmp_path)
                 write_pcd_from_ndarray(z_decoded[j], tmp_path + "/" + car_id + ".xyz")
             pbar.update(cfg['batch_size'])
-            if i > 1:
+            if i == 0:
                 break
         pbar.close()
     print("Finish Generating Point Cloud")

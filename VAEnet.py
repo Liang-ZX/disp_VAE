@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from stn_net import PointNetfeat, T_Net
 from CapsuleNet import PrimaryPointCapsLayer
-from loss_function import compute_chamfer_loss
+# from loss_function import compute_chamfer_loss
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -98,7 +98,7 @@ class VAEnn(nn.Module):
         self.encoder2 = VAEencoder(cfg, n_pts=cfg["generate_cnt"])
         self.decoder = VAEdecoder(cfg)
         self.decoder2 = VAEdecoder(cfg, latent_num=2*cfg["latent_num"])
-        # self.criterion = nn.MSELoss(reduction='none')
+        self.criterion = nn.MSELoss(reduction='none')
         # self.feat = PointNetfeat(global_feat=False, feature_transform=False)  # pointNet  B * 1088 * N
         self.apply(init_weights)
 
@@ -122,7 +122,10 @@ class VAEnn(nn.Module):
             epsilon = epsilon.cuda()
         latent_code = z_mean.unsqueeze(2) + torch.exp(z_log_var.unsqueeze(2)) * epsilon  # B * latent_num * N
 
-        z_decoded = self.decoder(latent_code)  # B * 3 * N
+        if self.with_encoder:
+            z_decoded = self.decoder(latent_code)  # B * 3 * N
+        else:
+            z_decoded = self.decoder2(latent_code)
         # z_decoded = z_decoded.transpose(2, 1)
         # z_decoded = torch.bmm(z_decoded, torch.inverse(trans))
         # z_decoded = z_decoded.transpose(2, 1).contiguous()
@@ -148,10 +151,10 @@ class VAEnn(nn.Module):
         # input B * 3 * N
         x = input_coordinates.transpose(2, 1).contiguous()
         z = z_decoded.transpose(2, 1).contiguous()
-        reconstr_loss = compute_chamfer_loss(x, z)  # B * 1
-        # z = z.view(batch_size, -1)
-        # x = x.view(batch_size, -1)
-        # reconstr_loss = torch.mean(self.criterion(z, x), dim=-1)
+        # reconstr_loss = compute_chamfer_loss(x, z)  # B * 1
+        z = z.view(batch_size, -1)
+        x = x.view(batch_size, -1)
+        reconstr_loss = torch.mean(self.criterion(z, x), dim=-1)
         # KL-loss
         z_log_var = self.encoder.z_log_var  # B * latent_num
         z_mean = self.encoder.z_mean

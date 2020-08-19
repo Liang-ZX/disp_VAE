@@ -13,7 +13,7 @@ class ResnetEncoder(nn.Module):
     def forward(self, x):
         z_mean = self.mean_encoder(x)
         z_log_var = self.log_var_encoder(x)
-        return z_mean, z_log_var  # B * 384
+        return z_mean, z_log_var  # B * (256*2)
 
 
 class Resnet18(nn.Module):
@@ -71,8 +71,7 @@ class Resnet101(nn.Module):
 class DispVAEnet(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        c_dim = cfg["latent_num"] * 2
-        self.encoder = ResnetEncoder(c_dim)
+        self.encoder = ResnetEncoder(cfg["latent_num"] * 2)
         self.decoder = VAEnn(cfg, with_encoder=False)
         self.is_val = cfg["is_val"]
         if self.is_val:

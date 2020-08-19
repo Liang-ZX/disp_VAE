@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 import os
-from mesh_dataset import PcdDataset, write_pcd_from_ndarray
+from pcd_dataset import PcdDataset, write_pcd_from_ndarray
 from VAEnet import VAEnn
 import warnings
 warnings.filterwarnings('ignore')
