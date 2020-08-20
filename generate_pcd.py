@@ -55,9 +55,10 @@ def inference(model, cfg, val_loader):
                     points = z_decoded
                 else:
                     points = np.concatenate((points, z_decoded), axis=0)
-            write_pcd_from_ndarray(points, tmp_path)
+            if points is not None:
+                write_pcd_from_ndarray(points, tmp_path)
             pbar.update(1)
-            if i == 3:
+            if i == 100:
                 break
         pbar.close()
     print("Finish Generating Point Cloud")
